@@ -749,7 +749,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
                 load_image(bootimage, boot_state);
         }
 
-exit:
         /* Allow plenty of time for the error to be visible before the
          * screen goes blank */
         pause(30);

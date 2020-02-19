@@ -213,7 +213,7 @@ static void fastboot_ui_info_signing(ui_textline_t *line)
 
 static void fastboot_ui_info_secure_boot(ui_textline_t *line)
 {
-	BOOLEAN state = is_efi_secure_boot_enabled();
+	BOOLEAN state = FALSE;
 
 	line->str = state ? "ENABLED" : "DISABLED";
 	line->color = state ? &COLOR_GREEN : &COLOR_RED;

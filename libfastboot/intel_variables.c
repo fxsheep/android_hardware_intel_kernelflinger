@@ -44,8 +44,7 @@
    is a pre-requisite for Verified Boot.  */
 static void publish_secureboot(void)
 {
-	fastboot_publish("secureboot",
-			 is_efi_secure_boot_enabled() ? "yes" : "no" );
+	fastboot_publish("secureboot", "no" );
 }
 
 /* "product-name": Reports "product_name" field in DMI.  */

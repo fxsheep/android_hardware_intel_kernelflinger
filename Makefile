@@ -1,3 +1,6 @@
+ARCH := x86_64
+ANDROID_BUILD_TOP := /home/sheep/ubuntu_ext/iwork8/tree
+
 ifeq ($(ARCH),x86_64)
 ARCH_DIR := linux-x86_64
 LIBGCC := $(shell $(CC) -print-libgcc-file-name)
@@ -24,12 +27,12 @@ CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 	-Iinclude/libkernelflinger -Iinclude/libfastboot
 
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
-	 -fshort-wchar -Wall -Wextra -Werror -mno-red-zone -maccumulate-outgoing-args \
+	 -fshort-wchar -Wall -Wextra -mno-red-zone -maccumulate-outgoing-args \
 	 -mno-mmx -fno-builtin -fno-tree-loop-distribute-patterns
 
-ifneq ($(INSECURE_LOADER),)
+#ifneq ($(INSECURE_LOADER),)
     CFLAGS += -DINSECURE
-endif
+#endif
 
 # Key pair used to sign & validate keystores
 OEM_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/oem
@@ -81,7 +84,6 @@ LIBFASTBOOT_OBJS := \
 	    libfastboot/hashes.o
 
 OBJS := kernelflinger.o \
-	oemkeystore.o \
 	ux.o
 
 all: kernelflinger.db.efi kernelflinger.vendor.efi kernelflinger.unsigned.efi

@@ -145,6 +145,7 @@ static EFI_STATUS flash_gpt(VOID *data, UINTN size)
 	return (EFI_SUCCESS | REFRESH_PARTITION_VAR);
 }
 
+/***
 static EFI_STATUS flash_keystore(VOID *data, UINTN size)
 {
 	EFI_STATUS ret;
@@ -167,6 +168,7 @@ static EFI_STATUS flash_keystore(VOID *data, UINTN size)
 
 	return ret;
 }
+***/
 
 static EFI_STATUS flash_efirun(VOID *data, UINTN size)
 {
@@ -289,7 +291,6 @@ static struct label_exception {
 	EFI_STATUS (*flash_func)(VOID *data, UINTN size);
 } LABEL_EXCEPTIONS[] = {
 	{ L"gpt", flash_gpt },
-	{ L"keystore", flash_keystore },
 	{ L"efirun", flash_efirun },
 	{ L"sfu", flash_sfu },
 	{ L"ifwi", flash_ifwi },

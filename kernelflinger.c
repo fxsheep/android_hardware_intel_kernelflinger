@@ -790,6 +790,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 return ret;
         }
         g_disk_device = g_loaded_image->DeviceHandle;
+/***
         oem_keystore = (UINT8 *)&oem_keystore_table +
                         oem_keystore_table.oem_keystore_offset;
         oem_keystore_size = oem_keystore_table.oem_keystore_size;
@@ -798,7 +799,7 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         oem_key_size = oem_keystore_table.oem_key_size;
         debug(L"oem key size %d keystore size %d", oem_key_size,
                         oem_keystore_size);
-
+***/
         debug(L"choosing a boot target");
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */

@@ -95,11 +95,11 @@ static UINTN get_bootimage_len(CHAR8 *buffer, UINTN buffer_len)
 		return 0;
 	}
 
-	bs = get_boot_signature(&buffer[len], BOOT_SIGNATURE_MAX_SIZE);
+	bs=NULL;
 
 	if (bs) {
 		len += bs->total_size;
-		free_boot_signature(bs);
+//		free_boot_signature(bs);
 	} else {
 		debug(L"boot image doesn't seem to have a signature");
 	}

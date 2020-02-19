@@ -86,45 +86,10 @@ LIBFASTBOOT_OBJS := \
 OBJS := kernelflinger.o \
 	ux.o
 
-all: kernelflinger.db.efi kernelflinger.vendor.efi kernelflinger.unsigned.efi
-
-kernelflinger.db.efi: kernelflinger.unsigned.efi $(DB_KEY_PAIR).x509.pem kernelflinger.db.key
-	sbsign --key kernelflinger.db.key \
-		--cert $(DB_KEY_PAIR).x509.pem \
-		--output $@ $<
-
-kernelflinger.vendor.efi: kernelflinger.unsigned.efi $(VENDOR_KEY_PAIR).x509.pem kernelflinger.vendor.key
-	sbsign --key kernelflinger.vendor.key \
-		--cert $(VENDOR_KEY_PAIR).x509.pem \
-		--output $@ $<
-
-oem.key: $(OEM_KEY_PAIR).pk8
-	openssl pkcs8 -inform DER -nocrypt -in $< -out $@
-
-oem.cer: $(OEM_KEY_PAIR).x509.pem
-	openssl x509 -outform der -in $< | dd of=$@ ibs=4096 count=1 conv=sync
-
-# DER formatted public verity key
-verity.cer: $(VERITY_PRIVATE_KEY)
-	openssl rsa -pubout -inform PEM -outform der -in $< -out $@
-
-keystore.bin: oem.key verity.cer $(KEYSTORE_SIGNER)
-	$(KEYSTORE_SIGNER) oem.key $@ verity.cer
-
-keystore.padded.bin: keystore.bin
-	dd ibs=32768 if=$< of=$@ count=1 conv=sync
-
-oemkeystore.o: oemkeystore.S keystore.padded.bin oem.cer
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@ -DOEM_KEYSTORE_FILE=\"keystore.padded.bin\" -DOEM_KEY_FILE=\"oem.cer\"
+all: kernelflinger.unsigned.efi
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
-
-kernelflinger.db.key: $(DB_KEY_PAIR).pk8
-	openssl pkcs8 -nocrypt -inform DER -outform PEM -in $^ -out $@
-
-kernelflinger.vendor.key: $(VENDOR_KEY_PAIR).pk8
-	openssl pkcs8 -nocrypt -inform DER -outform PEM -in $^ -out $@
 
 %.unsigned.efi: %.so
 	objcopy -j .text -j .sdata -j .data \

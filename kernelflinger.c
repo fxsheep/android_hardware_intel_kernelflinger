@@ -668,25 +668,6 @@ static VOID enter_fastboot_mode(UINT8 boot_state, VOID *keystore,
         set_efi_variable(&fastboot_guid, BOOT_STATE_VAR, sizeof(boot_state),
                          &boot_state, FALSE, TRUE);
 
-        /* No bootimage, try the ESP fastboot file.  */
-        if (!bootimage) {
-                ret = android_image_load_file(g_disk_device, FASTBOOT_PATH,
-                                              FALSE, &bootimage);
-
-                if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND)
-                        goto exit;
-        }
-
-        /* If we have a bootimage, validate it against the selected
-           keystore and load it.  */
-        if (bootimage) {
-                if (keystore
-                    && EFI_ERROR(validate_bootimage(ESP_BOOTIMAGE, bootimage,
-                                                    keystore, keystore_size)))
-                        goto exit;
-
-                load_image(bootimage, boot_state);
-        }
 
         /* Otherwise, start the internal fastboot protocol
            implementation.  */
@@ -834,9 +815,8 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         }
 #else
         /* Make sure it's abundantly clear! */
-        error(L"INSECURE BOOTLOADER - SYSTEM SECURITY IN RED STATE");
-        pause(1);
-        boot_state = BOOT_STATE_RED;
+        error(L"INSECURE BOOTLOADER - CHEERS!");
+        boot_state = BOOT_STATE_GREEN;
 #endif
 
         /* EFI binaries are validated by the BIOS */

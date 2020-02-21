@@ -510,7 +510,7 @@ static EFI_STATUS load_boot_image(
 
         debug(L"boot image loaded");
 
-        return ret;
+        return EFI_SUCCESS;
 }
 
 

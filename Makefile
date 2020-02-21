@@ -18,9 +18,6 @@ EFI_LIBS := -lefi -lgnuefi --start-group $(OPENSSL_TOP)/$(ARCH_DIR)/libcryptlib.
 		$(OPENSSL_TOP)/$(ARCH_DIR)/libopenssl.a --end-group \
 		$(LIBGCC)
 
-# The key to sign kernelflinger with
-DB_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/DB
-VENDOR_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/vendor
 
 CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 	-I$(GNU_EFI_INCLUDE)/$(ARCH) -I$(OPENSSL_TOP)/include -I$(OPENSSL_TOP)/include/Include \
@@ -29,19 +26,6 @@ CPPFLAGS := -DKERNELFLINGER -I$(GNU_EFI_INCLUDE) \
 CFLAGS := -ggdb -O3 -fno-stack-protector -fno-strict-aliasing -fpic \
 	 -fshort-wchar -Wall -Wextra -mno-red-zone -maccumulate-outgoing-args \
 	 -mno-mmx -fno-builtin -fno-tree-loop-distribute-patterns
-
-#ifneq ($(INSECURE_LOADER),)
-    CFLAGS += -DINSECURE
-#endif
-
-# Key pair used to sign & validate keystores
-OEM_KEY_PAIR ?= $(ANDROID_BUILD_TOP)/device/intel/build/testkeys/oem
-
-# We'll use the verity key in the build as our testing keystore for signing
-# boot images. We'll extract the public key from the PEM private key
-VERITY_PRIVATE_KEY := $(ANDROID_BUILD_TOP)/build/target/product/security/verity_private_dev_key
-
-KEYSTORE_SIGNER := $(ANDROID_BUILD_TOP)/out/host/linux-x86/bin/keystore_signer
 
 ifeq ($(ARCH),x86_64)
 CFLAGS += -DEFI_FUNCTION_WRAPPER -DGNU_EFI_USE_MS_ABI
@@ -59,9 +43,7 @@ LIB_OBJS := libkernelflinger/android.o \
 	    libkernelflinger/acpi.o \
 	    libkernelflinger/lib.o \
 	    libkernelflinger/options.o \
-	    libkernelflinger/security.o \
 	    libkernelflinger/asn1.o \
-	    libkernelflinger/keystore.o \
 	    libkernelflinger/vars.o \
 	    libkernelflinger/ui.o \
 	    libkernelflinger/ui_font.o \

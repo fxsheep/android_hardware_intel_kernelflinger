@@ -30,7 +30,6 @@
  *
  */
 
-#include <security.h>
 #include <lib.h>
 #include <vars.h>
 
@@ -40,12 +39,6 @@
 #include "smbios.h"
 #include "intel_variables.h"
 
-/* "secureboot": Indicates whether UEFI Secure Boot is enabled. This
-   is a pre-requisite for Verified Boot.  */
-static void publish_secureboot(void)
-{
-	fastboot_publish("secureboot", "no" );
-}
 
 /* "product-name": Reports "product_name" field in DMI.  */
 static void publish_product_name(void)
@@ -88,13 +81,6 @@ static void publish_boot_state(void)
 	fastboot_publish("boot-state", BOOT_STATES_STRING[state]);
 }
 
-/* "device-state": Indicates the device's lock state as per Google's
- * Verified Boot specification. Possible values are "unlocked",
- * "locked", "verified". */
-static void publish_device_state(void)
-{
-	fastboot_publish("device-state", get_current_state_string());
-}
 
 /* "board": Indicates the board information, combining the values of
  * DMI "board_vendor", "board_name", and "board_version" fields.  */
@@ -111,10 +97,8 @@ static void publish_board(void)
 
 void publish_intel_variables(void)
 {
-	publish_secureboot();
 	publish_product_name();
 	publish_firmware();
 	publish_boot_state();
-	publish_device_state();
 	publish_board();
 }

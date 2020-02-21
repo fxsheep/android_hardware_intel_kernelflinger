@@ -24,6 +24,32 @@
 #define BOOT_NAME_SIZE 16
 #define BOOT_ARGS_SIZE 512
 #define BOOT_EXTRA_ARGS_SIZE 1024
+#define TARGET_MAX		32
+#define BOOT_TARGET_SIZE         32
+#define BOOT_SIGNATURE_MAX_SIZE  2048
+
+struct auth_attributes {
+	char target[TARGET_MAX];
+	long length;
+	const void *data;
+	long data_sz;
+};
+
+struct algorithm_identifier {
+	int nid;
+	void *parameters;
+	long parameters_len;
+};
+
+struct boot_signature {
+	long format_version;
+	struct algorithm_identifier id;
+	struct auth_attributes attributes;
+	void *signature;
+	long signature_len;
+	long total_size;
+};
+
 
 struct boot_img_hdr
 {

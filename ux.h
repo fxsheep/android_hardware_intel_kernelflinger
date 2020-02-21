@@ -36,25 +36,6 @@
 #include <efi.h>
 #include <efilib.h>
 
-/* TRUE: OK, use keystore anyway
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_keystore_unverified(UINT8 *hash);
-
-/* TRUE: Fastboot
- * FALSE: halt system */
-BOOLEAN ux_warn_user_unverified_recovery(VOID);
-
-/* TRUE: Recovery
- * FALSE: Halt system */
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID);
-
-/* TRUE: OK to boot
- * FALSE: Fastboot */
-BOOLEAN ux_prompt_user_device_unlocked(VOID);
-
-/* TRUE: OK to boot
- * FALSE: power off */
-BOOLEAN ux_prompt_user_secure_boot_off(VOID);
 
 EFI_STATUS ux_init(VOID);
 

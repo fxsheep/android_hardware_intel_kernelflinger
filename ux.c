@@ -243,18 +243,6 @@ BOOLEAN ux_warn_user_unverified_recovery(VOID) {
 	return ux_prompt_user(bad_recovery, NULL);
 }
 
-BOOLEAN ux_prompt_user_bootimage_unverified(VOID) {
-	return ux_prompt_user(red_state, NULL);
-}
-
-BOOLEAN ux_prompt_user_secure_boot_off(VOID) {
-	return ux_prompt_user(secure_boot_off, NULL);
-}
-
-BOOLEAN ux_prompt_user_device_unlocked(VOID) {
-	return ux_prompt_user(device_altered_unlocked, NULL);
-}
-
 BOOLEAN ux_display_splash() {
 	UINT8 value;
 	EFI_STATUS ret;

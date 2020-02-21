@@ -41,8 +41,6 @@
 #include "uefi_utils.h"
 #include "gpt.h"
 #include "android.h"
-#include "keystore.h"
-#include "security.h"
 
 static void hash_buffer(CHAR8 *buffer, UINT64 len, CHAR8 *hash)
 {

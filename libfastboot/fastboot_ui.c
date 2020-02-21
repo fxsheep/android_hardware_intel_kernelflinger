@@ -35,7 +35,6 @@
 #include <lib.h>
 #include <vars.h>
 #include <ui.h>
-#include <security.h>
 
 #include "uefi_utils.h"
 #include "fastboot_oem.h"
@@ -44,79 +43,6 @@
 #include "info.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(*x))
-
-static const ui_textline_t unlocked_headers[] = {
-	{ &COLOR_WHITE,		"        Unlock bootloader?",			TRUE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"If you unlock the bootloader, you will",	FALSE },
-	{ &COLOR_WHITE,		"be able to install custom operating",		FALSE },
-	{ &COLOR_WHITE,		"system software on this device and such",	FALSE },
-	{ &COLOR_WHITE,		"software will not be verified at boot.",	FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"Changing device state will also delete",	FALSE },
-	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
-	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"YES",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"NO",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
-	{ NULL, NULL, FALSE }
-};
-
-static ui_textline_t locked_headers[] = {
-	{ &COLOR_WHITE,		"         Lock bootloader?", 			TRUE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"If you lock the bootloader, you will", 	FALSE },
-	{ &COLOR_WHITE,		"prevent the device from having any",		FALSE },
-	{ &COLOR_WHITE,		"custom software flashed until it is",		FALSE },
-	{ &COLOR_WHITE,		"again set to 'unlocked' or 'verified'",	FALSE },
-	{ &COLOR_WHITE,		"state.",					FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"Changing device state will also delete",	FALSE },
-	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
-	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"YES",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"NO",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
-	{ NULL, NULL, FALSE }
-};
-
-static ui_textline_t verified_headers[] = {
-	{ &COLOR_WHITE,		"     Set bootloader to Verified?",		TRUE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"If you set the loader to Verified state,",	FALSE },
-	{ &COLOR_WHITE,		"you may flash custom software to",		FALSE },
-	{ &COLOR_WHITE,		"the device and the loader will attempt",	FALSE },
-	{ &COLOR_WHITE,		"to verify these custom images against",	FALSE },
-	{ &COLOR_WHITE,		"either the OEM keystore or a keystore",	FALSE },
-	{ &COLOR_WHITE,		"supplied by you. Some, but not all",		FALSE },
-	{ &COLOR_WHITE,		"fastboot commands will be available.",		FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_WHITE,		"Changing device state will also delete",	FALSE },
-	{ &COLOR_WHITE,		"all personal data from your device",		FALSE },
-	{ &COLOR_WHITE,		"(a 'factory data reset').",			FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"YES",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume UP key",				FALSE },
-	{ &COLOR_WHITE,		"",						FALSE },
-	{ &COLOR_YELLOW,	"NO",						TRUE },
-	{ &COLOR_WHITE,		"Press Volume DOWN key",			FALSE },
-	{ NULL, NULL, FALSE }
-};
-
-static struct msg_for_state {
-	const ui_textline_t *msg;
-	enum device_state state;
-} const FASTBOOT_UI_CONFIRM[] = {
-	{ unlocked_headers,	UNLOCKED },
-	{ locked_headers,	LOCKED },
-	{ verified_headers,	VERIFIED }
-};
 
 static const char *DROID_IMG_NAME = "droid_operation";
 static const UINTN SPACE = 20;
@@ -211,19 +137,6 @@ static void fastboot_ui_info_signing(ui_textline_t *line)
 	line->str = state ? "PRODUCTION" : "DEVELOPMENT";
 }
 
-static void fastboot_ui_info_secure_boot(ui_textline_t *line)
-{
-	BOOLEAN state = FALSE;
-
-	line->str = state ? "ENABLED" : "DISABLED";
-	line->color = state ? &COLOR_GREEN : &COLOR_RED;
-}
-
-static void fastboot_ui_info_lock_state(ui_textline_t *line)
-{
-	line->str = get_current_state_string();
-	line->color = get_current_state_color();
-}
 
 struct info_text_fun {
 	const char *header;
@@ -236,8 +149,6 @@ struct info_text_fun {
 	{ "IFWI VERSION", fastboot_ui_info_ifwi_version },
 	{ "SERIAL NUMBER", fastboot_ui_info_serial_number },
 	{ "SIGNING", fastboot_ui_info_signing },
-	{ "SECURE BOOT", fastboot_ui_info_secure_boot },
-	{ "LOCK STATE", fastboot_ui_info_lock_state }
 };
 
 static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
@@ -283,30 +194,6 @@ static UINTN fastboot_ui_info_draw(UINTN x, UINTN y)
 	return y + textarea->height;
 }
 
-BOOLEAN fastboot_ui_confirm_for_state(enum device_state target)
-{
-	UINTN i;
-	BOOLEAN result = FALSE;
-	ui_font_t *font;
-	UINTN y = area_y;
-
-	font = ui_font_get("18x32");
-	if (!font) {
-		efi_perror(EFI_UNSUPPORTED, "Unable to find 18x32 font");
-		return result;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(FASTBOOT_UI_CONFIRM); i++)
-		if (target == FASTBOOT_UI_CONFIRM[i].state) {
-			fastboot_ui_clear_dynamic_part();
-			ui_textarea_display_text(FASTBOOT_UI_CONFIRM[i].msg,
-						 font, area_x, &y);
-			result = ui_input_to_bool(60);
-			fastboot_ui_refresh();
-		}
-
-	return result;
-}
 
 static EFI_STATUS fastboot_ui_menu_load(void)
 {

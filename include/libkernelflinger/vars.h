@@ -70,9 +70,6 @@ extern const EFI_GUID misc_ptn_guid;
  * magic key was pressed at startup */
 #define MAGIC_KEY_TIMEOUT_VAR   L"MagicKeyTimeout"
 
-BOOLEAN device_is_unlocked(void);
-BOOLEAN device_is_locked(void);
-BOOLEAN device_is_verified(void);
 BOOLEAN get_current_off_mode_charge(void);
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled);
 

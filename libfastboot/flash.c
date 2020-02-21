@@ -35,7 +35,6 @@
 #include <efi.h>
 #include <efilib.h>
 #include <lib.h>
-#include <keystore.h>
 #include <fastboot.h>
 #include <openssl/rand.h>
 #include <android.h>

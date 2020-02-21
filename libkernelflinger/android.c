@@ -38,7 +38,6 @@
 #include "android.h"
 #include "efilinux.h"
 #include "lib.h"
-#include "security.h"
 #include "vars.h"
 #include "power.h"
 

@@ -58,18 +58,6 @@ const EFI_GUID misc_ptn_guid = { 0xef32a33b, 0xa409, 0x486c,
 	{0x91, 0x41, 0x9f, 0xfb, 0x71, 0x1f, 0x62, 0x66 } };
 
 static BOOLEAN provisioning_mode = FALSE;
-static enum device_state current_state = UNKNOWN_STATE;
-
-static struct state_display {
-	char *string;
-	EFI_GRAPHICS_OUTPUT_BLT_PIXEL *color;
-} STATE_DISPLAY[] = {
-	{ "unknown", &COLOR_RED },
-	{ "locked", &COLOR_RED },
-	{ "verified", &COLOR_WHITE },
-	{ "unlocked", &COLOR_WHITE }
-};
-
 static CHAR8 current_off_mode_charge[2];
 
 BOOLEAN get_current_off_mode_charge(void)
@@ -97,75 +85,9 @@ BOOLEAN get_current_off_mode_charge(void)
 
 enum device_state get_current_state()
 {
-	UINT8 *stored_state;
-	UINTN dsize;
-	EFI_STATUS ret;
-	UINT32 flags;
-
-	if (current_state == UNKNOWN_STATE) {
-		ret = get_efi_variable((EFI_GUID *)&fastboot_guid, OEM_LOCK_VAR,
-				       &dsize, (void **)&stored_state, &flags);
-		/* If the variable does not exist, assume unlocked. */
-		if (ret == EFI_NOT_FOUND) {
-			debug(L"OEMLock not set, device is in provisioning mode");
-			provisioning_mode = TRUE;
-			current_state = UNLOCKED;
-			goto exit;
-		}
-
-		/* If we can't read the state, be safe and assume locked. */
-		if (EFI_ERROR(ret) || !dsize) {
-			error(L"Couldn't read %s, assuming locked", OEM_LOCK_VAR);
-			current_state = LOCKED;
-		} else if (flags & EFI_VARIABLE_RUNTIME_ACCESS) {
-			error(L"%s has RUNTIME_ACCESS flag, assuming locked", OEM_LOCK_VAR);
-			current_state = LOCKED;
-		} else {
-			if (stored_state[0] & OEM_LOCK_UNLOCKED)
-				current_state = UNLOCKED;
-			else if (stored_state[0] & OEM_LOCK_VERIFIED)
-				current_state = VERIFIED;
-			else
-				current_state = LOCKED;
-
-			debug(L"device state %d", current_state);
-		}
-	}
-
-exit:
-	return current_state;
+	return UNLOCKED;
 }
 
-EFI_STATUS set_current_state(enum device_state state)
-{
-	UINT8 stored_state;
-
-	switch (state) {
-	case LOCKED:
-		stored_state = 0;
-		break;
-	case VERIFIED:
-		stored_state = OEM_LOCK_VERIFIED;
-		break;
-	case UNLOCKED:
-		stored_state = OEM_LOCK_UNLOCKED;
-		break;
-	default:
-		return EFI_INVALID_PARAMETER;
-	}
-
-	EFI_STATUS ret = set_efi_variable(&fastboot_guid, OEM_LOCK_VAR,
-					  sizeof(stored_state), &stored_state,
-					  TRUE, FALSE);
-	if (EFI_ERROR(ret)) {
-		efi_perror(ret, "Failed to set %a variable", OEM_LOCK_VAR);
-		return ret;
-	}
-
-	debug(L"device state is now %d", state);
-	current_state = state;
-	return EFI_SUCCESS;
-}
 
 EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 {
@@ -179,39 +101,6 @@ EFI_STATUS set_off_mode_charge(BOOLEAN enabled)
 
 	memcpy(current_off_mode_charge, val, 2);
 	return EFI_SUCCESS;
-}
-
-char *get_current_state_string()
-{
-	return STATE_DISPLAY[get_current_state() + 1].string;
-}
-
-EFI_GRAPHICS_OUTPUT_BLT_PIXEL *get_current_state_color()
-{
-	return STATE_DISPLAY[get_current_state() + 1].color;
-}
-
-BOOLEAN device_is_unlocked()
-{
-	return get_current_state() == UNLOCKED;
-}
-
-BOOLEAN device_is_locked()
-{
-	return get_current_state() == LOCKED;
-}
-
-BOOLEAN device_is_verified()
-{
-	return get_current_state() == VERIFIED;
-}
-
-BOOLEAN device_is_provisioning(void)
-{
-	/* Force OEM_LOCK_VAR check if we haven't already */
-	get_current_state();
-
-	return provisioning_mode;
 }
 
 VOID clear_provisioning_mode(void)

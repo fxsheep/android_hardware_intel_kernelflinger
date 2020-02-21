@@ -49,103 +49,9 @@
 
 static void fastboot_oem_publish(void)
 {
-	fastboot_publish("secure", device_is_locked() ? "yes" : "no");
-	fastboot_publish("unlocked", device_is_unlocked() ? "yes" : "no");
 	fastboot_publish(OFF_MODE_CHARGE, get_current_off_mode_charge() ? "1" : "0");
 }
 
-static void change_device_state(enum device_state new_state)
-{
-	EFI_STATUS ret;
-
-	if (get_current_state() == new_state) {
-		error(L"Device is already in the required state.");
-		fastboot_okay("");
-		return;
-	}
-
-	if (!device_is_provisioning() && !fastboot_ui_confirm_for_state(new_state))
-		goto exit;
-
-	ui_print(L"Erasing userdata...");
-	ret = erase_by_label(L"data");
-	if (EFI_ERROR(ret) && ret != EFI_NOT_FOUND) {
-		fastboot_fail("Failed to wipe data.\n");
-		return;
-	}
-
-	if (ret == EFI_NOT_FOUND)
-		ui_print(L"Not userdata partition to erase.");
-	else
-		ui_print(L"Erase done.");
-
-	ret = set_current_state(new_state);
-	if (EFI_ERROR(ret)) {
-		fastboot_fail("Failed to change the device state\n");
-		return;
-	}
-
-	fastboot_oem_publish();
-	fastboot_ui_refresh();
-        clear_provisioning_mode();
-
-exit:
-	fastboot_okay("");
-}
-
-static void cmd_oem_lock(__attribute__((__unused__)) INTN argc,
-			 __attribute__((__unused__)) CHAR8 **argv)
-{
-	change_device_state(LOCKED);
-}
-
-static void cmd_oem_unlock(__attribute__((__unused__)) INTN argc,
-			   __attribute__((__unused__)) CHAR8 **argv)
-{
-	struct gpt_partition_interface gparti;
-	EFI_STATUS ret;
-	UINT64 offset;
-	UINT8 unlock_allowed;
-
-	/* Enforce if we're not in provisioning mode and the persistent
-	 * partition exists */
-	if (!device_is_provisioning() &&
-	    !EFI_ERROR(gpt_get_partition_by_label(L"persistent", &gparti))) {
-
-		/* We need to check the last byte of the partition. The gparti
-		 * .dio object is a handle to the beginning of the disk */
-		offset = ((gparti.part.ending_lba + 1)
-			  * gparti.bio->Media->BlockSize) - 1;
-		ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
-					gparti.bio->Media->MediaId, offset, 1,
-					&unlock_allowed);
-		if (EFI_ERROR(ret)) {
-			/* Pathological if this fails, GPT screwed up? */
-			efi_perror(ret, "Couldn't read persistent partition");
-			unlock_allowed = 0;
-		}
-	} else {
-		unlock_allowed = 1;
-	}
-
-	if (unlock_allowed == 0) {
-#ifdef USER
-		fastboot_fail("Unlocking device not allowed");
-#else
-		fastboot_info("Unlock protection is set");
-		fastboot_info("Unlocking anyway since this is not a User build");
-		change_device_state(UNLOCKED);
-#endif
-	} else {
-		change_device_state(UNLOCKED);
-	}
-}
-
-static void cmd_oem_verified(__attribute__((__unused__)) INTN argc,
-			     __attribute__((__unused__)) CHAR8 **argv)
-{
-	change_device_state(VERIFIED);
-}
 
 static void cmd_oem_off_mode_charge(__attribute__((__unused__)) INTN argc,
 				    CHAR8 **argv)
@@ -255,9 +161,6 @@ static void cmd_oem_gethashes(__attribute__((__unused__)) INTN argc,
 void fastboot_oem_init(void)
 {
 	fastboot_oem_publish();
-	fastboot_oem_register("lock", cmd_oem_lock, FALSE);
-	fastboot_oem_register("unlock", cmd_oem_unlock, FALSE);
-	fastboot_oem_register("verified", cmd_oem_verified, FALSE);
 	fastboot_oem_register(OFF_MODE_CHARGE, cmd_oem_off_mode_charge, FALSE);
 
 	/* The following commands are not part of the Google

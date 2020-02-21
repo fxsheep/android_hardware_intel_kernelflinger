@@ -38,7 +38,6 @@
 
 #include "vars.h"
 #include "lib.h"
-#include "security.h"
 #include "android.h"
 #include "ux.h"
 #include "options.h"
@@ -78,18 +77,6 @@ static EFI_HANDLE g_parent_image;
 static EFI_HANDLE g_disk_device;
 static EFI_LOADED_IMAGE *g_loaded_image;
 
-extern struct {
-        UINT32 oem_keystore_size;
-        UINT32 oem_key_size;
-        UINT32 oem_keystore_offset;
-        UINT32 oem_key_offset;
-} oem_keystore_table;
-
-static VOID *oem_keystore;
-static UINTN oem_keystore_size;
-
-static VOID *oem_key;
-static UINTN oem_key_size;
 
 #if DEBUG_MESSAGES
 static CHAR16 *boot_target_to_string(enum boot_target bt)
@@ -132,24 +119,6 @@ static CHAR16 *boot_state_to_string(UINT8 boot_state)
 }
 #endif
 
-#ifndef INSECURE
-/* If a user-provided keystore is present it must be selected for later.
- * If no user-provided keystore is present then the original factory
- * keystore must be selected instead. Selection of a keystore is
- * independent of validation of that keystore. */
-static VOID select_keystore(VOID **keystore, UINTN *size)
-{
-        if (EFI_ERROR(get_efi_variable(&fastboot_guid, KEYSTORE_VAR,
-                                       size, keystore, NULL)) ||
-                        *size == 0) {
-                debug(L"selected OEM keystore");
-                *keystore = oem_keystore;
-                *size = oem_keystore_size;
-        } else {
-                debug(L"selected User-supplied keystore");
-        }
-}
-#endif
 
 static enum boot_target check_fastboot_sentinel(VOID)
 {
@@ -490,58 +459,6 @@ static enum boot_target choose_boot_target(VOID **target_address,
         return check_charge_mode();
 }
 
-/* Validate an image against a keystore.
- *
- * boot_target - Boot image to load. Values supported are NORMAL_BOOT, RECOVERY,
- *               and ESP_BOOTIMAGE (for 'fastboot boot')
- * bootimage   - bootimage to validate against the keystore.
- * keystore    - Keystore to validate image with.
- * keystore_size - Size of keystore in bytes
- *
- * Return values:
- * EFI_ACCESS_DENIED - Validation failed against supplied keystore
- */
-static EFI_STATUS validate_bootimage(
-                IN enum boot_target boot_target,
-                IN VOID *bootimage,
-                IN VOID *keystore,
-                IN UINTN keystore_size)
-{
-        CHAR16 target[BOOT_TARGET_SIZE];
-        CHAR16 *expected;
-        EFI_STATUS ret;
-
-        ret = verify_android_boot_image(bootimage, keystore,
-                                        keystore_size, target);
-
-        if (EFI_ERROR(ret)) {
-                debug(L"boot image doesn't verify");
-                return EFI_ACCESS_DENIED;
-        }
-
-        switch (boot_target) {
-        case NORMAL_BOOT:
-        case CHARGER:
-                expected = L"/boot";
-                break;
-        case RECOVERY:
-                expected = L"/recovery";
-                break;
-        case ESP_BOOTIMAGE:
-                expected = L"/fastboot";
-                break;
-        default:
-                expected = NULL;
-        }
-
-        if (!expected || StrCmp(expected, target)) {
-                debug(L"boot image has unexpected target name");
-                return EFI_ACCESS_DENIED;
-        }
-
-        return EFI_SUCCESS;
-}
-
 /* Load a boot image into RAM. If a keystore is supplied, validate the image
  * against it.
  *
@@ -592,11 +509,6 @@ static EFI_STATUS load_boot_image(
                 return ret;
 
         debug(L"boot image loaded");
-        if (keystore)
-                ret = validate_bootimage(boot_target, *bootimage, keystore, keystore_size);
-
-        if (EFI_ERROR(ret))
-                FreePool(*bootimage);
 
         return ret;
 }
@@ -744,13 +656,11 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
         VOID *target_address = NULL;
         VOID *bootimage = NULL;
         BOOLEAN oneshot = FALSE;
-        BOOLEAN lock_prompted = FALSE;
         VOID *selected_keystore = NULL;
         UINTN selected_keystore_size = 0;
         enum boot_target boot_target = NORMAL_BOOT;
         UINT8 boot_state = BOOT_STATE_GREEN;
         CHAR16 *loader_version = KERNELFLINGER_VERSION;
-        UINT8 hash[KEYSTORE_HASH_SIZE];
 
         /* gnu-efi initialization */
         InitializeLib(image, sys_table);
@@ -770,54 +680,13 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                 return ret;
         }
         g_disk_device = g_loaded_image->DeviceHandle;
-/***
-        oem_keystore = (UINT8 *)&oem_keystore_table +
-                        oem_keystore_table.oem_keystore_offset;
-        oem_keystore_size = oem_keystore_table.oem_keystore_size;
-        oem_key = (UINT8 *)&oem_keystore_table +
-                        oem_keystore_table.oem_key_offset;
-        oem_key_size = oem_keystore_table.oem_key_size;
-        debug(L"oem key size %d keystore size %d", oem_key_size,
-                        oem_keystore_size);
-***/
         debug(L"choosing a boot target");
         /* No UX prompts before this point, do not want to interfere
          * with magic key detection */
         boot_target = choose_boot_target(&target_address, &target_path, &oneshot);
         debug(L"selected '%s'",  boot_target_to_string(boot_target));
 
-#ifndef INSECURE
-        debug(L"checking device state");
-
-        if (!is_efi_secure_boot_enabled()) {
-                debug(L"uefi secure boot is disabled");
-                boot_state = BOOT_STATE_ORANGE;
-                lock_prompted = TRUE;
-
-                /* Need to warn early, before we even enter Fastboot
-                 * or run EFI binaries. Set lock_prompted to true so
-                 * we don't ask again later */
-                if (!ux_prompt_user_secure_boot_off())
-                        halt_system();
-        } else  if (device_is_unlocked()) {
-                boot_state = BOOT_STATE_ORANGE;
-                debug(L"Device is unlocked");
-        } else {
-                debug(L"examining keystore");
-
-                select_keystore(&selected_keystore, &selected_keystore_size);
-                if (EFI_ERROR(verify_android_keystore(selected_keystore,
-                                        selected_keystore_size,
-                                        oem_key, oem_key_size, hash))) {
-                        debug(L"keystore not validated");
-                        boot_state = BOOT_STATE_YELLOW;
-                }
-        }
-#else
-        /* Make sure it's abundantly clear! */
-        error(L"INSECURE BOOTLOADER - CHEERS!");
         boot_state = BOOT_STATE_GREEN;
-#endif
 
         /* EFI binaries are validated by the BIOS */
         if (boot_target == ESP_EFI_BINARY) {
@@ -839,27 +708,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *sys_table)
                                     selected_keystore_size, target_address);
         }
 
-        /* Past this point is where we start to care if the keystore isn't
-         * validated or the device is unlocked via Fastboot, start to prompt
-         * the user if we aren't GREEN */
-
-        /* If the user keystore is bad the only way to fix it is via
-         * fastboot */
-        if (boot_state == BOOT_STATE_YELLOW &&
-                        !ux_prompt_user_keystore_unverified(hash)) {
-                enter_fastboot_mode(BOOT_STATE_RED, selected_keystore,
-                                    selected_keystore_size, NULL);
-        }
-
-        /* If the device is unlocked the only way to re-lock it is
-         * via fastboot. Skip this UX if we already prompted earlier
-         * about EFI secure boot being turned off */
-        if (boot_state == BOOT_STATE_ORANGE && !lock_prompted &&
-                        !ux_prompt_user_device_unlocked()) {
-                enter_fastboot_mode(BOOT_STATE_RED, selected_keystore,
-                                    selected_keystore_size, NULL);
-        }
-
 fallback:
         debug(L"loading boot image");
         ret = load_boot_image(boot_target, selected_keystore,
@@ -877,17 +725,11 @@ fallback:
                  * un-hose this device is through Fastboot */
                 if (boot_target == RECOVERY) {
                         debug(L"recovery image is bad");
-                        if (ux_warn_user_unverified_recovery())
-                                enter_fastboot_mode(BOOT_STATE_RED,
-                                                    selected_keystore,
-                                                    selected_keystore_size,
-                                                    NULL);
-                        else
-                                halt_system();
+                        enter_fastboot_mode(BOOT_STATE_RED,
+                                             selected_keystore,
+                                             selected_keystore_size,
+                                             NULL);
                 }
-
-                if (!ux_prompt_user_bootimage_unverified())
-                        halt_system();
 
                 /* Fall back to loading Recovery Console so they
                  * can sideload an OTA to fix their device */

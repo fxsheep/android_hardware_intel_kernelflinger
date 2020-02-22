@@ -1079,15 +1079,31 @@ EFI_STATUS write_bcb(
         EFI_BLOCK_IO *BlockIo;
         EFI_DISK_IO *DiskIo;
         UINT32 MediaId;
+        UINT32 use_label = 0;
 
-        debug(L"Locating BCB");
         ret = open_partition(bcb_guid, &MediaId, &BlockIo, &DiskIo);
-        if (EFI_ERROR(ret))
-                return EFI_INVALID_PARAMETER;
+        if (EFI_ERROR(ret)){
+                ret = gpt_get_partition_by_label(L"misc", &gparti);
+                if (EFI_ERROR(ret))
+                        ret = gpt_get_partition_by_label(L"android_misc", &gparti);
+                if(!EFI_ERROR(ret)){
+                        use_label = 1;
+                }
+                else{
+                        return ret;
+                }
+        }
 
         debug(L"Writing BCB");
-        ret = uefi_call_wrapper(DiskIo->WriteDisk, 5, DiskIo, MediaId, 0,
-                        sizeof(*bcb), bcb);
+        if (use_label == 1)
+                ret = uefi_call_wrapper(gparti.dio->WriteDisk, 5, gparti.dio,
+                                gparti.bio->Media->MediaId,
+                                gparti.part.starting_lba * gparti.bio->Media->BlockSize,
+                                sizeof(*bcb), bcb);
+        else
+               ret = uefi_call_wrapper(DiskIo->WriteDisk, 5, DiskIo, MediaId, 0,
+                                sizeof(*bcb), bcb);
+
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, "WriteDisk (bcb)");
                 return ret;

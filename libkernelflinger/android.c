@@ -170,6 +170,8 @@ struct boot_params {
         UINT8 _pad9[276];
 };
 
+struct gpt_partition_interface gparti;
+
 typedef void(*handover_func)(void *, EFI_SYSTEM_TABLE *, struct boot_params *) \
             __attribute__((regparm(0)));
 
@@ -723,7 +725,6 @@ EFI_STATUS android_image_load_partition(
         UINT32 img_size;
         VOID *bootimage;
         EFI_STATUS ret;
-	struct gpt_partition_interface gparti;
         struct boot_img_hdr aosp_header;
 	UINT32 use_label = 0;		
 
@@ -732,8 +733,12 @@ EFI_STATUS android_image_load_partition(
         if (EFI_ERROR(ret)){
 		if (guid == &boot_ptn_guid)
 			ret = gpt_get_partition_by_label(L"boot", &gparti);
+			if (EFI_ERROR(ret))
+	                        ret = gpt_get_partition_by_label(L"android_boot", &gparti);
 		if (guid == &recovery_ptn_guid)
 			ret = gpt_get_partition_by_label(L"recovery", &gparti);
+			if (EFI_ERROR(ret))
+	                        ret = gpt_get_partition_by_label(L"android_recovery", &gparti);
 		if(!EFI_ERROR(ret)){
 			use_label = 1;
 		}
@@ -1027,15 +1032,32 @@ EFI_STATUS read_bcb(
         EFI_BLOCK_IO *BlockIo;
         EFI_DISK_IO *DiskIo;
         UINT32 MediaId;
+	UINT32 use_label = 0;
 
         debug(L"Locating BCB");
         ret = open_partition(bcb_guid, &MediaId, &BlockIo, &DiskIo);
-        if (EFI_ERROR(ret))
-                return EFI_INVALID_PARAMETER;
+       	if (EFI_ERROR(ret)){
+       		ret = gpt_get_partition_by_label(L"misc", &gparti);
+		if (EFI_ERROR(ret))
+       			ret = gpt_get_partition_by_label(L"android_misc", &gparti);
+                if(!EFI_ERROR(ret)){
+                        use_label = 1;
+                }
+                else{
+                        return ret;
+                }
+	}
 
         debug(L"Reading BCB");
-        ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
-                        sizeof(*bcb), bcb);
+        if (use_label == 1)
+                ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+                                gparti.bio->Media->MediaId,
+                                gparti.part.starting_lba * gparti.bio->Media->BlockSize,
+                        	sizeof(*bcb), bcb);
+        else
+               ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
+                        	sizeof(*bcb), bcb);
+
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, "ReadDisk (bcb)");
                 return ret;

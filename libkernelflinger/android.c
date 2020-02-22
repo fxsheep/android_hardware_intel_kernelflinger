@@ -40,6 +40,7 @@
 #include "lib.h"
 #include "vars.h"
 #include "power.h"
+#include "../libfastboot/gpt.h"
 
 
 struct setup_header {
@@ -722,16 +723,35 @@ EFI_STATUS android_image_load_partition(
         UINT32 img_size;
         VOID *bootimage;
         EFI_STATUS ret;
+	struct gpt_partition_interface gparti;
         struct boot_img_hdr aosp_header;
+	UINT32 use_label = 0;		
 
         debug(L"Locating boot image");
         ret = open_partition(guid, &MediaId, &BlockIo, &DiskIo);
-        if (EFI_ERROR(ret))
-                return ret;
-
+        if (EFI_ERROR(ret)){
+		if (guid == &boot_ptn_guid)
+			ret = gpt_get_partition_by_label(L"boot", &gparti);
+		if (guid == &recovery_ptn_guid)
+			ret = gpt_get_partition_by_label(L"recovery", &gparti);
+		if(!EFI_ERROR(ret)){
+			use_label = 1;
+		}
+		else{
+                	return ret;
+		}
+	}
         debug(L"Reading boot image header");
-        ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
-                        sizeof(aosp_header), &aosp_header);
+	if (use_label == 1)
+	        ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+                                gparti.bio->Media->MediaId,
+                                gparti.part.starting_lba * gparti.bio->Media->BlockSize,
+                                sizeof(aosp_header), &aosp_header);
+
+	else
+        	ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
+                	        sizeof(aosp_header), &aosp_header);
+
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, "ReadDisk (header)");
                 return ret;
@@ -747,8 +767,15 @@ EFI_STATUS android_image_load_partition(
                 return EFI_OUT_OF_RESOURCES;
 
         debug(L"Reading full boot image (%d bytes)", img_size);
-        ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
-                        img_size, bootimage);
+        if (use_label)
+                ret = uefi_call_wrapper(gparti.dio->ReadDisk, 5, gparti.dio,
+                                gparti.bio->Media->MediaId,
+                                gparti.part.starting_lba * gparti.bio->Media->BlockSize,
+                                img_size, bootimage);
+        else
+        	ret = uefi_call_wrapper(DiskIo->ReadDisk, 5, DiskIo, MediaId, 0,
+                	        img_size, bootimage);
+
         if (EFI_ERROR(ret)) {
                 efi_perror(ret, "ReadDisk");
                 FreePool(bootimage);
@@ -756,6 +783,7 @@ EFI_STATUS android_image_load_partition(
         }
 
         *bootimage_p = bootimage;
+
         return EFI_SUCCESS;
 }
 
